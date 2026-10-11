@@ -8,7 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, FindOptionsWhere, QueryFailedError } from 'typeorm';
 import { User } from './entities/user.entity';
-import { CreateUserParams } from './user.interface';
+import { CreateUserParams, UpdateUserParams } from './user.interface';
 import { v4 as uuid } from 'uuid';
 
 @Injectable()
@@ -32,6 +32,14 @@ export class UsersService {
       return await this.user.save(newUser);
     } catch (error) {
       this.handleError(error, 'creating');
+    }
+  }
+
+  async update(user: User, params: UpdateUserParams): Promise<User> {
+    try {
+      return await this.user.save({ ...user, ...params });
+    } catch (error) {
+      this.handleError(error, 'updating');
     }
   }
 

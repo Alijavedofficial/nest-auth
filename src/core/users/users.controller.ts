@@ -1,5 +1,7 @@
 import {
+  BadRequestException,
   Body,
+  ConflictException,
   Controller,
   Get,
   HttpCode,
@@ -10,12 +12,19 @@ import {
   Res,
   UnauthorizedException,
 } from '@nestjs/common';
-import { AuthService } from '../../utils/auth/auth.service';
-import { Token } from '../../utils/auth/entities/token.entity';
-import { CredentialsDto, CryptoTokenDTO, FetchUserDto } from './dto/user.dto';
-import { UsersService } from './users.service';
 import { Response } from 'express';
+import { AuthService } from '../../utils/auth/auth.service';
 import { ClassicResponseDTO } from '../../utils/auth/dto/util.dto';
+import { Token } from '../../utils/auth/entities/token.entity';
+import {
+  CredentialsDTO,
+  CryptoTokenDTO,
+  FetchUserDTO,
+  ForgotPasswordDTO,
+  ResetPasswordDTO,
+} from './dto/user.dto';
+import { User } from './entities/user.entity';
+import { UsersService } from './users.service';
 
 @Controller('users')
 export class UsersController {
@@ -27,8 +36,8 @@ export class UsersController {
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   async registerUser(
-    @Body() { email, password }: CredentialsDto,
-  ): Promise<FetchUserDto> {
+    @Body() { email, password }: CredentialsDTO,
+  ): Promise<FetchUserDTO> {
     // Create User
     const hashedPassword = await this.authService.bcryptHash(password);
     const user = await this.usersService.create({
@@ -47,7 +56,7 @@ export class UsersController {
     // Send Email(Will be implemented later)
 
     // Return User
-    return new FetchUserDto(user);
+    return new FetchUserDTO(user);
   }
 
   @Patch('verify/:token')
@@ -55,7 +64,7 @@ export class UsersController {
   async verifyUser(
     @Param() { token }: CryptoTokenDTO,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<FetchUserDto> {
+  ): Promise<FetchUserDTO> {
     // Verify User
     const hashedToken: string = this.authService.cryptoHashToken(token);
     const { id }: Token = await this.authService.findToken({
@@ -79,15 +88,15 @@ export class UsersController {
     res.cookie('user', jwt, options);
 
     // Return User
-    return new FetchUserDto(user);
+    return new FetchUserDTO(user);
   }
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async loginUser(
-    @Body() { email, password }: CredentialsDto,
+    @Body() { email, password }: CredentialsDTO,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<FetchUserDto> {
+  ): Promise<FetchUserDTO> {
     // Find User
     const user = await this.usersService.find({ email });
 
@@ -117,7 +126,7 @@ export class UsersController {
     res.cookie('user', jwt, options);
 
     //Return User
-    return new FetchUserDto(user);
+    return new FetchUserDTO(user);
   }
 
   @Get('logout')
@@ -133,5 +142,67 @@ export class UsersController {
       message: 'User logged out successfully',
       statusCode: HttpStatus.OK,
     });
+  }
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(
+    @Body() { email }: ForgotPasswordDTO,
+  ): Promise<ClassicResponseDTO> {
+    // Find User
+    const { id }: User = await this.usersService.find({ email });
+
+    // Check if User is verified
+    const token: Token = await this.authService.findToken({ id });
+    if (!token.verified) {
+      throw new ConflictException('User is not verified');
+    }
+
+    // Generate Token
+    const cryptoToken: string = this.authService.cryptoGenerateToken();
+    const hashedToken: string = this.authService.cryptoHashToken(cryptoToken);
+    await this.authService.createToken({ id, passwordToken: hashedToken });
+
+    // Send Email(Will be implemented later)
+
+    // Return Response
+    return new ClassicResponseDTO({
+      message: 'Password reset email sent successfully',
+      statusCode: HttpStatus.OK,
+    });
+  }
+
+  @Patch('reset-password/:token')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(
+    @Param() { token }: CryptoTokenDTO,
+    @Body() { password }: ResetPasswordDTO,
+  ): Promise<FetchUserDTO> {
+    // Find and Verify Token
+    const hashedToken: string = this.authService.cryptoHashToken(token);
+    const { id }: Token = await this.authService.findToken({
+      passwordToken: hashedToken,
+    });
+
+    // Find User
+    const user: User = await this.usersService.find({ id });
+
+    // Check password is not the same as the old password
+    const isSamePassword: boolean = await this.authService.bcryptCompare(
+      password,
+      user?.password,
+    );
+    if (isSamePassword) {
+      throw new BadRequestException(
+        'New password cannot be the same as old password',
+      );
+    }
+
+    // Update Password
+    const hashedPassword: string = await this.authService.bcryptHash(password);
+    await this.usersService.update(user, { password: hashedPassword });
+
+    // Return User
+    return new FetchUserDTO(user);
   }
 }

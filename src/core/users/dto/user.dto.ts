@@ -1,3 +1,4 @@
+import { PickType } from '@nestjs/mapped-types';
 import { Exclude } from 'class-transformer';
 import { IsNotEmpty, IsString, Matches } from 'class-validator';
 import {
@@ -5,8 +6,8 @@ import {
   passwordRegExp,
 } from '../../../utils/validators/validator';
 
-export class FetchUserDto {
-  constructor(partial: Partial<FetchUserDto>) {
+export class FetchUserDTO {
+  constructor(partial: Partial<FetchUserDTO>) {
     Object.assign(this, partial);
   }
 
@@ -23,7 +24,7 @@ export class FetchUserDto {
   deletedAt: Date | null;
 }
 
-export class CredentialsDto {
+export class CredentialsDTO {
   @IsString()
   @IsNotEmpty()
   @Matches(emailRegExp.pattern, emailRegExp.validationOptions)
@@ -40,3 +41,11 @@ export class CryptoTokenDTO {
   @IsNotEmpty()
   token: string;
 }
+
+export class ForgotPasswordDTO extends PickType(CredentialsDTO, [
+  'email',
+] as const) {}
+
+export class ResetPasswordDTO extends PickType(CredentialsDTO, [
+  'password',
+] as const) {}

@@ -200,6 +200,7 @@ export class UsersController {
 
     // Update Password
     const hashedPassword: string = await this.authService.bcryptHash(password);
+    await this.authService.updateToken(id, { passwordToken: null });
     await this.usersService.update(user, { password: hashedPassword });
 
     // Return User

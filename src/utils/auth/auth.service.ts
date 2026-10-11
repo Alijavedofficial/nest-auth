@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -6,10 +7,17 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Token } from './entities/token.entity';
-import { Repository } from 'typeorm';
-import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
+import { CookieOptions, Response } from 'express';
+import { FindOptionsWhere, Repository } from 'typeorm';
+import { Token } from './entities/token.entity';
+import {
+  createCookieParams,
+  createTokenParams,
+  JwtCookie,
+  updateTokenParams,
+} from './interfaces/auth.interface';
 
 @Injectable()
 export class AuthService {
@@ -24,6 +32,16 @@ export class AuthService {
   private readonly hashAlgorithm: string = 'sha256';
   private readonly salt: number = 10;
   private readonly tokenEncoding: string = 'hex';
+
+  private readonly jwtSecret: string | undefined =
+    this.configService.get<string>('JWT_SECRET');
+  private readonly jwtDomain: string | undefined =
+    this.configService.get<string>('JWT_DOMAIN');
+  private readonly jwtExpiresInDays: number = Number(
+    this.configService.get('JWT_EXPIRES_IN'),
+  );
+  private readonly jwtExpiresInMilliseconds: number =
+    Number(this.jwtExpiresInDays) * 24 * 60 * 60 * 1000;
 
   cryptoGenerateToken(): string {
     return crypto
@@ -58,5 +76,58 @@ export class AuthService {
         `Error comparing values: ${value} and ${encryptedValue}`,
       );
     }
+  }
+
+  async findToken(params: FindOptionsWhere<Token>): Promise<Token> {
+    const token = await this.tokenRepository.findOneBy(params);
+    if (!token) {
+      throw new BadRequestException(
+        'Credentials are invalid or token has expired',
+      );
+    }
+    return token;
+  }
+
+  async createToken(params: createTokenParams): Promise<void> {
+    try {
+      await this.tokenRepository.save(params);
+    } catch (error) {
+      this.logger.error(error);
+      throw new InternalServerErrorException('Error creating token');
+    }
+  }
+
+  async updateToken(id: string, params: updateTokenParams): Promise<void> {
+    try {
+      await this.tokenRepository.update({ id }, params);
+    } catch (error) {
+      this.logger.error(error);
+      throw new InternalServerErrorException('Error updating token');
+    }
+  }
+
+  async createCookie(params: createCookieParams): Promise<JwtCookie> {
+    const options: CookieOptions = this.setCookieOptions();
+
+    try {
+      const jwt: string = await this.JwtService.signAsync(
+        { ...params },
+        { secret: this.jwtSecret, expiresIn: `${this.jwtExpiresInDays}d` },
+      );
+      return { jwt, options };
+    } catch (error) {
+      this.logger.error(error);
+      throw new InternalServerErrorException('Error creating cookie');
+    }
+  }
+
+  clearCookies(res: Response, cookies: string[]): void {
+    cookies.forEach((cookie: string): void => {
+      res.clearCookie(cookie, { domain: this.jwtDomain });
+    });
+  }
+  private setCookieOptions(): CookieOptions {
+    const expires = new Date(Date.now() + this.jwtExpiresInMilliseconds);
+    return { httpOnly: true, expires, domain: this.jwtDomain, secure: true };
   }
 }

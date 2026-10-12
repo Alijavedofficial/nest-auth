@@ -29,6 +29,17 @@ import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
         JWT_SECRET: Joi.string().required(),
         JWT_DOMAIN: Joi.string().required(),
         JWT_EXPIRES_IN: Joi.string().required(),
+
+        REDIS_HOST: Joi.string().required(),
+        REDIS_PORT: Joi.number().required(),
+
+        SENDGRID_KEY: Joi.string().required(),
+        SENDGRID_FROM: Joi.string().required(),
+        SENDGRID_NAME: Joi.string().required(),
+
+        SENDGRID_WELCOME: Joi.string().required(),
+        SENDGRID_VERIFY_EMAIL: Joi.string().required(),
+        SENDGRID_RESET_PASSWORD: Joi.string().required(),
       }),
     }),
 

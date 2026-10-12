@@ -21,6 +21,7 @@ import {
   CryptoTokenDTO,
   FetchUserDTO,
   ForgotPasswordDTO,
+  ResendEmailDTO,
   ResetPasswordDTO,
 } from './dto/user.dto';
 import { User } from './entities/user.entity';
@@ -206,4 +207,10 @@ export class UsersController {
     // Return User
     return new FetchUserDTO(user);
   }
+
+  @Post('resend-email')
+  @HttpCode(HttpStatus.OK)
+  async resendEmail(
+    @Body() { email, template }: ResendEmailDTO,
+  ): Promise<ClassicResponseDTO> {}
 }
